@@ -1,56 +1,72 @@
 # Claude Assistant — Suggestion Box
 
-A companion pane for Claude Code that sits beside your chat in **every session**
-and tells you what to create next: a hook, a subagent, a skill, a CLAUDE.md rule,
-a DESIGN.md, an MCP connection, a permissions allowlist.
+A beginner-friendly advisor for Claude Code. You say `/suggest`; it studies **your
+project** and **your past sessions**, then tells you exactly what to create next and
+why: which **subagent** (for which task), **hook**, **skill**, **CLAUDE.md** rules,
+**DESIGN.md**, **MCP server** or **plugin**. Pick the ones you want and it writes them
+for you, explaining each part so you learn the format.
 
-It reads your own Claude Code transcripts (`~/.claude/projects/*/*.jsonl`), your
-current session, and your existing setup (`CLAUDE.md`, `.claude/`), then spots
-patterns:
+```
+## What I learned about your project
+A Next.js + Tailwind shop. You're polishing the cart and checkout.
 
-| It notices… | It suggests… |
-| --- | --- |
-| "every time / from now on / whenever…" in your prompts | a **hook** |
-| "always / never / make sure…" repeated | **CLAUDE.md** rules |
-| Claude running tests/lint right after edits | a **PostToolUse hook** |
-| the same prompt opening again and again | a **skill** or slash command |
-| lots of reading/searching | a **subagent** |
-| many UI/design prompts, no DESIGN.md | a **DESIGN.md** |
-| the same safe commands approved repeatedly | a **permissions allowlist** |
-| commit/push/PR over and over | a **/ship command** |
-| talk of GitHub, Figma, Slack… | an **MCP server** |
+## Start here
+1. Subagent — cart-reviewer
+   - Task: review changes in src/cart/ for pricing and rounding bugs
+   - Why now: 14 edits in src/cart/ and 3 corrections about rounding
+2. Hook — run `pnpm run lint` after every edit
+   - Why now: Claude ran it right after edits 11 times
+3. DESIGN.md …
+```
 
-It also learns **your project**: stack (Next.js, Python, Rust…), package manager,
-the real `test` / `lint` / `format` scripts, `.env` files, database migrations,
-monorepo layout, and whether your `CLAUDE.md` mentions how to test. Sessions are
-read **in full** (this project's newest 40, plus a few from other projects for your
-habits), so suggestions use your actual commands, folders and files, e.g. "auto-run
-`pnpm run lint` after edits", "block `.env` access", "give `src/cart/` its own CLAUDE.md".
+## Install
 
-Each suggestion shows the evidence from your sessions, what to create, and a
-ready-to-send prompt. Press **Put in my prompt** (or **Copy**), review it, hit
-Enter, and Claude builds it with you. The **Learn** tab is a short tour of every
-Claude Code feature, also with starter prompts.
+In Claude Code, type these two lines one at a time:
 
-Everything is analysed locally by plain code. Nothing is sent anywhere.
-
-## Install (once, works in all sessions)
-
-In Claude Code on your own computer:
-
-```bash
+```
 /plugin marketplace add kavithashan10/claude-assistant
 /plugin install suggestion-box@claude-assistant
 ```
 
-Choose **user** scope so it loads in every project. Then start a new session —
-the pane opens by itself. Reopen it any time with `/suggestions`.
+Start a new session, then run:
 
-Keys inside the pane: `s` suggestions, `l` learn, `r` refresh.
+```
+/suggestion-box:suggest
+```
 
-## Notes
+Optional focus: `/suggestion-box:suggest subagents`, `… hooks`, `… design`.
 
-- Past sessions are read from the machine the plugin runs on. In a cloud session
-  you only see that container's history, so install it locally for the full picture.
-- Suggestions are heuristic. Dismissing one hides it permanently.
-- Browse community skills at [skills.sh](https://skills.sh).
+### If the plugin install gives errors
+
+Copy the two files in by hand; no plugin needed:
+
+```bash
+git clone https://github.com/kavithashan10/claude-assistant
+mkdir -p ~/.claude/agents ~/.claude/skills/suggest ~/.claude/scripts
+cp claude-assistant/plugins/suggestion-box/agents/advisor.md ~/.claude/agents/
+cp claude-assistant/plugins/suggestion-box/skills/suggest/SKILL.md ~/.claude/skills/suggest/
+cp claude-assistant/plugins/suggestion-box/scripts/digest.py ~/.claude/scripts/
+```
+
+Then in `~/.claude/agents/advisor.md` and `~/.claude/skills/suggest/SKILL.md` replace
+`${CLAUDE_PLUGIN_ROOT}/scripts/digest.py` with `~/.claude/scripts/digest.py`. Run `/suggest`.
+
+## How it works
+
+1. `plugins/suggestion-box/scripts/digest.py` (read-only, local) summarises the project (stack, scripts, folders,
+   git churn, existing `.claude/` setup, `.env` files by name only) and your history in
+   `~/.claude/projects` (commands run, files edited most, repeated prompts, corrections,
+   "every time…" requests).
+2. The **advisor** subagent reads that, opens the important files, judges what stage the
+   project is in, and writes a ranked report with evidence.
+3. `/suggest` shows it and creates what you choose.
+
+Nothing is uploaded anywhere beyond your normal Claude Code session.
+
+## Optional: live side pane (experimental)
+
+`suggestion-box-pane` is a rule-based side pane. It needs a recent Claude Code and may
+not work everywhere:
+`/plugin install suggestion-box-pane@claude-assistant`.
+
+Browse community skills at [skills.sh](https://skills.sh).

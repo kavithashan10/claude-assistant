@@ -1,9 +1,9 @@
 import { expect, test } from 'claude-code/testing'
 
 const PANE = {
-  plugin: 'suggestion-box',
+  plugin: 'suggestion-box-pane',
   component: 'Pane',
-  requestId: 'suggestion-box',
+  requestId: 'suggestion-box-pane',
   props: {
     title: 'Suggestion Box',
     isFocused: false,

@@ -1,0 +1,10 @@
+{
+  "name": "suggestion-box-pane",
+  "version": "0.1.0",
+  "description": "Optional, experimental: a live side pane version of the Suggestion Box (needs a recent Claude Code).",
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "kavithashan10"
+  }
+}

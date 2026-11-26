@@ -15,7 +15,7 @@ import {
   type Turn,
 } from './analyze'
 
-const PANE = 'suggestion-box'
+const PANE = 'suggestion-box-pane'
 const MAX_HERE = 40 // newest past sessions of THIS project, read whole
 const MAX_ELSEWHERE = 12 // newest sessions of other projects (your habits)
 const CHUNK = 3_000_000 // bytes per read (a read may not exceed 4 MiB)
@@ -26,19 +26,19 @@ const ROOT_FILES = [
 ]
 const RESCAN_MS = 5 * 60_000
 
-const report = atom({ plugin: 'suggestion-box', key: 'report' } as const, null as Report | null, {
+const report = atom({ plugin: 'suggestion-box-pane', key: 'report' } as const, null as Report | null, {
   shape: 'report-2',
 })
-const tab = atom({ plugin: 'suggestion-box', key: 'tab' } as const, 'suggest' as 'suggest' | 'learn', {
+const tab = atom({ plugin: 'suggestion-box-pane', key: 'tab' } as const, 'suggest' as 'suggest' | 'learn', {
   shape: 'tab-1',
 })
-const open = atom({ plugin: 'suggestion-box', key: 'open' } as const, '', {
+const open = atom({ plugin: 'suggestion-box-pane', key: 'open' } as const, '', {
   shape: 'open-1',
 })
-const dismissed = atom({ plugin: 'suggestion-box', key: 'dismissed' } as const, [] as string[], {
+const dismissed = atom({ plugin: 'suggestion-box-pane', key: 'dismissed' } as const, [] as string[], {
   shape: 'dismissed-1',
 })
-const busy = atom({ plugin: 'suggestion-box', key: 'busy' } as const, false, {
+const busy = atom({ plugin: 'suggestion-box-pane', key: 'busy' } as const, false, {
   shape: 'busy-1',
 })
 

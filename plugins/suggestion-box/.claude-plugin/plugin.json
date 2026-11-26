@@ -1,0 +1,7 @@
+{
+  "name": "suggestion-box",
+  "version": "0.2.0",
+  "description": "A beginner-friendly advisor: reads your project and Claude Code history, then tells you which subagents, hooks, skills, DESIGN.md, MCP servers and plugins to create, and creates them for you.",
+  "license": "MIT",
+  "author": { "name": "kavithashan10" }
+}

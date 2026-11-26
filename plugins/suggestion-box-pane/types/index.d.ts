@@ -23,7 +23,7 @@ export type Report = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'suggestion-box': {
+    'suggestion-box-pane': {
       report: Shaped<Report | null>
       tab: Shaped<'suggest' | 'learn'>
       open: Shaped<string>

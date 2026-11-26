@@ -1,11 +1,22 @@
 {
   "name": "claude-assistant",
-  "owner": { "name": "kavithashan10" },
+  "description": "Claude Code helpers by kavithashan10",
+  "owner": {
+    "name": "kavithashan10"
+  },
   "plugins": [
     {
       "name": "suggestion-box",
-      "source": "./",
-      "description": "A companion pane that reads your Claude Code sessions and suggests hooks, subagents, skills and CLAUDE.md rules to create."
+      "source": "./plugins/suggestion-box",
+      "description": "Run /suggestion-box:suggest. An advisor that reads your project and history and recommends the subagents, hooks, skills, DESIGN.md, MCP servers and plugins to create next."
+    },
+    {
+      "name": "suggestion-box-pane",
+      "source": "./plugins/suggestion-box-pane",
+      "description": "Optional and experimental: a live side pane version. Needs a recent Claude Code.",
+      "author": {
+        "name": "kavithashan10"
+      }
     }
   ]
 }
