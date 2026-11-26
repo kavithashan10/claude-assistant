@@ -1,0 +1,11 @@
+{
+  "name": "claude-assistant",
+  "owner": { "name": "kavithashan10" },
+  "plugins": [
+    {
+      "name": "suggestion-box",
+      "source": "./",
+      "description": "A companion pane that reads your Claude Code sessions and suggests hooks, subagents, skills and CLAUDE.md rules to create."
+    }
+  ]
+}

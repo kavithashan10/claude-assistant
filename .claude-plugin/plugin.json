@@ -1,0 +1,7 @@
+{
+  "name": "suggestion-box",
+  "version": "0.1.0",
+  "description": "A side pane that reads your Claude Code sessions and suggests hooks, subagents, skills, CLAUDE.md rules and more to create next.",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}
