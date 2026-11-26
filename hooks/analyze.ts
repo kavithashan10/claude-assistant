@@ -11,6 +11,7 @@ export type Turn = {
 }
 export type Setup = {
   claudeMd: boolean
+  claudeMdText: string
   designMd: boolean
   hooks: boolean
   agents: number
@@ -21,6 +22,7 @@ export type Setup = {
 
 export const EMPTY_SETUP: Setup = {
   claudeMd: false,
+  claudeMdText: '',
   designMd: false,
   hooks: false,
   agents: 0,
@@ -162,6 +164,182 @@ function count<T>(items: T[], key: (x: T) => string | undefined): Map<string, nu
 const top = (m: Map<string, number>, n = 3): [string, number][] =>
   [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n)
 
+
+// ---------------------------------------------------------------- project
+
+export type Project = {
+  name: string
+  stacks: string[]
+  pm?: string
+  scripts: {
+    test?: string
+    lint?: string
+    format?: string
+    typecheck?: string
+    build?: string
+    dev?: string
+  }
+  hasEnv: boolean
+  hasCi: boolean
+  hasDocker: boolean
+  hasDb: boolean
+  hasTests: boolean
+  isMonorepo: boolean
+  hasFrontend: boolean
+  summary: string
+}
+
+export const EMPTY_PROJECT: Project = {
+  name: '',
+  stacks: [],
+  scripts: {},
+  hasEnv: false,
+  hasCi: false,
+  hasDocker: false,
+  hasDb: false,
+  hasTests: false,
+  isMonorepo: false,
+  hasFrontend: false,
+  summary: 'project not recognised',
+}
+
+const NODE_STACKS: [string, string][] = [
+  ['next', 'Next.js'], ['react', 'React'], ['vue', 'Vue'], ['svelte', 'Svelte'],
+  ['@angular/core', 'Angular'], ['astro', 'Astro'], ['express', 'Express'],
+  ['fastify', 'Fastify'], ['@nestjs/core', 'NestJS'], ['vite', 'Vite'],
+  ['tailwindcss', 'Tailwind'], ['electron', 'Electron'], ['expo', 'Expo'],
+  ['react-native', 'React Native'], ['prisma', 'Prisma'], ['@prisma/client', 'Prisma'],
+  ['drizzle-orm', 'Drizzle'], ['jest', 'Jest'], ['vitest', 'Vitest'],
+  ['@playwright/test', 'Playwright'], ['cypress', 'Cypress'],
+]
+const FRONTEND = new Set([
+  'Next.js', 'React', 'Vue', 'Svelte', 'Angular', 'Astro', 'Tailwind', 'Expo', 'React Native',
+])
+
+/**
+ * Reads the root files of a project (name -> text) and its top-level entry names
+ * into what the suggestions need to know: stack, real scripts, risks.
+ */
+export function detectProject(
+  folder: string,
+  files: Record<string, string | undefined>,
+  entries: string[],
+): Project {
+  const has = (n: string) => entries.includes(n)
+  const stacks: string[] = []
+  const add = (x: string) => {
+    if (!stacks.includes(x)) stacks.push(x)
+  }
+  const scripts: Project['scripts'] = {}
+  let name = folder
+  let pm: string | undefined
+  let isMonorepo =
+    has('pnpm-workspace.yaml') || has('turbo.json') || has('nx.json') || has('lerna.json')
+
+  const pkgText = files['package.json']
+  if (pkgText) {
+    try {
+      const pkg = JSON.parse(pkgText) as {
+        name?: string
+        scripts?: Record<string, string>
+        dependencies?: Record<string, string>
+        devDependencies?: Record<string, string>
+        workspaces?: unknown
+      }
+      if (pkg.name) name = pkg.name
+      if (pkg.workspaces) isMonorepo = true
+      const deps = { ...pkg.dependencies, ...pkg.devDependencies }
+      if (deps.typescript || has('tsconfig.json')) add('TypeScript')
+      else add('JavaScript')
+      for (const [dep, label] of NODE_STACKS) if (deps[dep]) add(label)
+      pm = has('pnpm-lock.yaml') ? 'pnpm'
+        : has('yarn.lock') ? 'yarn'
+        : has('bun.lockb') || has('bun.lock') ? 'bun'
+        : 'npm'
+      const run = (n: string) => (n === 'test' ? `${pm} test` : `${pm} run ${n}`)
+      const sc = pkg.scripts ?? {}
+      const pick = (...names: string[]) => {
+        const n = names.find(x => sc[x])
+        return n ? run(n) : undefined
+      }
+      scripts.test = pick('test')
+      scripts.lint = pick('lint')
+      scripts.format = pick('format', 'fmt', 'prettier')
+      scripts.typecheck = pick('typecheck', 'type-check', 'tsc', 'check-types')
+      scripts.build = pick('build')
+      scripts.dev = pick('dev', 'start')
+    } catch {
+      add('Node')
+    }
+  }
+  const py = `${files['pyproject.toml'] ?? ''}\n${files['requirements.txt'] ?? ''}`.toLowerCase()
+  if (py.trim() !== '') {
+    add('Python')
+    for (const [k, v] of [['django', 'Django'], ['flask', 'Flask'], ['fastapi', 'FastAPI'], ['pandas', 'pandas'], ['torch', 'PyTorch']] as const)
+      if (py.includes(k)) add(v)
+    if (py.includes('pytest')) scripts.test ??= 'pytest'
+    if (py.includes('ruff')) {
+      scripts.lint ??= 'ruff check .'
+      scripts.format ??= 'ruff format .'
+    } else if (py.includes('black')) scripts.format ??= 'black .'
+    if (py.includes('mypy')) scripts.typecheck ??= 'mypy .'
+  }
+  if (files['Cargo.toml']) {
+    add('Rust')
+    scripts.test ??= 'cargo test'
+    scripts.lint ??= 'cargo clippy'
+    scripts.format ??= 'cargo fmt'
+    scripts.build ??= 'cargo build'
+  }
+  if (files['go.mod']) {
+    add('Go')
+    scripts.test ??= 'go test ./...'
+    scripts.lint ??= 'go vet ./...'
+    scripts.format ??= 'go fmt ./...'
+    scripts.build ??= 'go build ./...'
+  }
+  if (files['Gemfile']) add('Ruby')
+  if (files['Gemfile']?.includes('rails')) add('Rails')
+  if (files['composer.json']) add('PHP')
+  if (files['pom.xml'] || has('build.gradle') || has('build.gradle.kts')) add('Java/Kotlin')
+
+  const hasDb =
+    has('prisma') || has('migrations') || has('drizzle') ||
+    stacks.some(x => ['Prisma', 'Drizzle', 'Django', 'Rails'].includes(x))
+  const project: Project = {
+    name,
+    stacks,
+    pm,
+    scripts,
+    hasEnv: entries.some(e => e === '.env' || e.startsWith('.env.')),
+    hasCi: has('.github') || has('.gitlab-ci.yml') || has('.circleci'),
+    hasDocker: has('Dockerfile') || has('docker-compose.yml') || has('compose.yaml'),
+    hasDb,
+    hasTests:
+      Boolean(scripts.test) || ['tests', 'test', '__tests__', 'spec'].some(has),
+    isMonorepo: isMonorepo || has('packages') || has('apps'),
+    hasFrontend: stacks.some(x => FRONTEND.has(x)),
+    summary: '',
+  }
+  const bits = [
+    project.name || 'this folder',
+    stacks.length ? stacks.slice(0, 5).join(', ') : 'stack unknown',
+    ...(pm ? [pm] : []),
+    ...(project.isMonorepo ? ['monorepo'] : []),
+  ]
+  project.summary = bits.join(' · ')
+  return project
+}
+
+/** What to tell Claude about this project, for prompts that need it. */
+export function projectBrief(p: Project): string {
+  if (p.stacks.length === 0) return ''
+  const cmds = Object.entries(p.scripts)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}: \`${v}\``)
+  return `This is a ${p.stacks.join(' / ')} project${p.isMonorepo ? ' (monorepo)' : ''}.${cmds.length ? ' Its commands: ' + cmds.join(', ') + '.' : ''}`
+}
+
 // ---------------------------------------------------------------- detectors
 
 type Ctx = {
@@ -169,6 +347,8 @@ type Ctx = {
   prompts: Turn[]
   tools: (Tool & { session: string })[]
   setup: Setup
+  project: Project
+  cwd: string
   sessions: number
 }
 
@@ -272,7 +452,7 @@ const allowlist: Detector = c => {
     why: `${plural(safe.length, 'read-only or check command')} ran across ${plural(counts.length, 'distinct kind')}. Allow-listing them in settings removes the permission prompts.`,
     evidence: counts.map(([k, v]) => `${k} — ${v}×`),
     make: 'permissions.allow rules in .claude/settings.json',
-    prompt: `Run /fewer-permission-prompts. If it isn't available, add these to permissions.allow in .claude/settings.json as Bash(...) rules: ${counts.map(([k]) => k).join(', ')}.`,
+    prompt: `Run /fewer-permission-prompts. If it isn't available, add these to permissions.allow in .claude/settings.json as Bash(...) rules: ${[...new Set([...counts.map(([k]) => k), ...Object.values(c.project.scripts).filter((x): x is string => Boolean(x) && x !== c.project.scripts.dev)])].join(', ')}.`,
     score: 55 + Math.min(Math.floor(safe.length / 4), 15),
   }
 }
@@ -361,7 +541,7 @@ const DESIGN =
 const designMd: Detector = c => {
   if (c.setup.designMd) return
   const hits = c.prompts.filter(p => DESIGN.test(p.text))
-  if (hits.length < 4) return
+  if (hits.length < (c.project.hasFrontend ? 2 : 4)) return
   return {
     id: 'design-md',
     kind: 'design-md',
@@ -369,7 +549,7 @@ const designMd: Detector = c => {
     why: `${plural(hits.length, 'prompt')} were about look and feel. A DESIGN.md (colors, type scale, spacing, component rules) gives Claude your design system once, instead of re-describing it every time.`,
     evidence: hits.slice(0, 3).map(p => clip(p.text)),
     make: 'DESIGN.md in the project root, referenced from CLAUDE.md',
-    prompt: `Look at the existing UI in this project and write DESIGN.md: color tokens, typography, spacing scale, border radius, button/input/card patterns, and dos & don'ts. Then add "Follow DESIGN.md for all UI work" to CLAUDE.md.`,
+    prompt: `Look at the existing UI in this project${c.project.stacks.length ? ' (' + c.project.stacks.filter(x => FRONTEND.has(x)).join(', ') + ')' : ''} and write DESIGN.md: color tokens, typography, spacing scale, border radius, button/input/card patterns, and dos & don'ts. Then add "Follow DESIGN.md for all UI work" to CLAUDE.md.`,
     score: 64,
   }
 }
@@ -447,10 +627,10 @@ const noClaudeMd: Detector = c => {
     id: 'init-claude-md',
     kind: 'claude-md',
     title: 'Create a CLAUDE.md for this project',
-    why: 'No CLAUDE.md was found here. It is the single highest-value file: build/test commands, conventions and gotchas that Claude reads at the start of every session.',
+    why: `No CLAUDE.md was found${c.project.stacks.length ? ' in this ' + c.project.stacks.slice(0, 3).join('/') + ' project' : ' here'}. It is the single highest-value file: build/test commands, conventions and gotchas that Claude reads at the start of every session.`,
     evidence: [],
     make: 'CLAUDE.md in the project root',
-    prompt: 'Run /init to generate a CLAUDE.md for this project, then trim it to what a new teammate would actually need.',
+    prompt: `Run /init to generate a CLAUDE.md for this project, then trim it to what a new teammate would actually need.${c.project.stacks.length ? ' ' + projectBrief(c.project) + ' Make sure the commands and the folder layout are in it.' : ''}`,
     score: 72,
   }
 }
@@ -471,30 +651,182 @@ const noHelpers: Detector = c => {
   }
 }
 
+
+const ENV_GUARD: Detector = c => {
+  if (!c.project.hasEnv) return
+  return {
+    id: 'hook-protect-env',
+    kind: 'hook',
+    title: 'Block Claude from reading or editing .env files',
+    why: `This project has .env files. They usually hold secrets. A PreToolUse hook can refuse Read/Edit/Write on them every time, no matter what the prompt says.`,
+    evidence: ['.env found in the project root'],
+    make: 'A PreToolUse hook (matcher Read|Edit|Write|Bash) in .claude/settings.json, or permissions.deny rules',
+    prompt: `Block access to secrets in this project. Add permissions.deny rules for Read(./.env*) and Edit(./.env*), and a PreToolUse hook that rejects any Bash command that cats or greps a .env file. Show me the settings JSON before saving.`,
+    score: c.setup.hooks ? 50 : 63,
+  }
+}
+
+const projectChecks: Detector = c => {
+  const cmd = c.project.scripts.format ?? c.project.scripts.lint ?? c.project.scripts.typecheck
+  if (!cmd || c.setup.hooks) return
+  return {
+    id: 'hook-project-checks',
+    kind: 'hook',
+    title: `Auto-run \`${cmd}\` after every edit`,
+    why: `Your ${c.project.stacks.slice(0, 2).join('/') || 'project'} defines \`${cmd}\` and you have no hooks yet. A PostToolUse hook runs it after each edit so mistakes surface immediately instead of ten edits later.`,
+    evidence: Object.entries(c.project.scripts)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k}: ${v}`),
+    make: 'A PostToolUse hook matching Edit|Write in .claude/settings.json',
+    prompt: `Create a PostToolUse hook in .claude/settings.json that runs \`${cmd}\` after Edit and Write. ${projectBrief(c.project)} Keep it quick, and show the failure output to Claude. Show me the JSON before saving.`,
+    score: 60,
+  }
+}
+
+const migrations: Detector = c => {
+  if (!c.project.hasDb) return
+  return {
+    id: 'hook-protect-migrations',
+    kind: 'hook',
+    title: 'Protect database migrations from accidental edits',
+    why: `This looks like a ${c.project.stacks.filter(x => ['Prisma', 'Drizzle', 'Django', 'Rails'].includes(x)).join('/') || 'database-backed'} project. Editing a migration that already ran causes painful drift; a PreToolUse hook can block it.`,
+    evidence: ['migrations / ORM detected'],
+    make: 'A PreToolUse hook on Edit|Write that rejects existing migration files',
+    prompt: `Add a PreToolUse hook that blocks Edit/Write on files in the migrations folder that already exist in git (new migrations are fine). Tell me the rule in plain words, then show the JSON.`,
+    score: 46,
+  }
+}
+
+const claudeMdStale: Detector = c => {
+  const { claudeMd, claudeMdText } = c.setup
+  const t = c.project.scripts.test ?? c.project.scripts.build
+  if (!claudeMd || claudeMdText === '' || !t) return
+  const word = t.replace(/^(npm|pnpm|yarn|bun)( run)? /, '')
+  if (claudeMdText.includes(t) || claudeMdText.includes(word)) return
+  return {
+    id: 'claude-md-commands',
+    kind: 'claude-md',
+    title: 'Your CLAUDE.md does not mention how to test or build',
+    why: `The project defines \`${t}\` but CLAUDE.md never says so. Claude then guesses commands and you correct it.`,
+    evidence: Object.entries(c.project.scripts)
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k}: ${v}`),
+    make: 'A "Commands" section in CLAUDE.md',
+    prompt: `Add a short "Commands" section to CLAUDE.md. ${projectBrief(c.project)} Only list commands that exist; check package.json / the build files first.`,
+    score: 59,
+  }
+}
+
+const testRunner: Detector = c => {
+  const runs = c.tools.filter(t => {
+    if (t.name !== 'Bash') return false
+    const k = commandKey(t.input.command)
+    return k ? CHECK.test(k) : false
+  }).length
+  if (runs < 6) return
+  const cmd = c.project.scripts.test ?? 'the test command'
+  return {
+    id: 'subagent-tests',
+    kind: 'subagent',
+    title: 'A test-runner subagent that keeps noisy output out of your chat',
+    why: `Checks ran ${plural(runs, 'time')} in your sessions. Test output is long; a subagent runs it in its own window and returns just "what failed and why".`,
+    evidence: [`${runs} test/lint/build runs`],
+    make: 'A subagent in .claude/agents/test-runner.md',
+    prompt: `Create a subagent .claude/agents/test-runner.md that runs \`${cmd}\`, and reports only the failing tests, the error message and the most likely file to fix. ${projectBrief(c.project)} Give it just Bash and Read.`,
+    score: 61,
+  }
+}
+
+const reviewer: Detector = c => {
+  if (c.setup.agents > 0 || c.project.stacks.length === 0 || c.prompts.length < 8) return
+  return {
+    id: 'subagent-reviewer',
+    kind: 'subagent',
+    title: `A reviewer subagent that knows your ${c.project.stacks.slice(0, 2).join('/')} stack`,
+    why: 'You have no custom subagents. A reviewer with your stack baked in catches the project-specific mistakes a generic review misses, and cannot edit anything.',
+    evidence: [c.project.summary],
+    make: 'A read-only subagent in .claude/agents/reviewer.md',
+    prompt: `Create a read-only subagent .claude/agents/reviewer.md that reviews my uncommitted diff. ${projectBrief(c.project)} List the specific mistakes people make in this stack and check for them.`,
+    score: 47,
+  }
+}
+
+const relPath = (p: string, cwd: string): string =>
+  cwd && p.startsWith(cwd + '/') ? p.slice(cwd.length + 1) : p
+
+const hotAreas: Detector = c => {
+  const files = c.tools.flatMap(t => {
+    const p = t.input.file_path
+    return typeof p === 'string' && p.startsWith('/') ? [{ name: t.name, path: relPath(p, c.cwd) }] : []
+  })
+  const dirs = count(
+    files.filter(f => EDITS.has(f.name) && !f.path.startsWith('/')),
+    f => f.path.split('/').slice(0, 2).join('/').replace(/\.[^/]+$/, ''),
+  )
+  const [dir, n] = top(dirs, 1)[0] ?? ['', 0]
+  const hot = dir !== '' && dir.includes('/') ? [dir, n] as const : undefined
+  const reread = top(count(files.filter(f => f.name === 'Read'), f => f.path), 3).filter(([, v]) => v >= 6)
+  if (!hot && reread.length === 0) return
+  const ev = [
+    ...(hot && hot[1] >= 8 ? [`${hot[0]}/ — ${hot[1]} edits`] : []),
+    ...reread.map(([k, v]) => `${k} — read ${v}×`),
+  ]
+  if (ev.length === 0) return
+  return {
+    id: 'claude-md-hot-areas',
+    kind: 'claude-md',
+    title: hot && hot[1] >= 8 ? `Give ${hot[0]}/ its own CLAUDE.md` : 'Teach Claude the files it keeps re-reading',
+    why: 'Claude keeps working in the same places and re-reading the same files. A CLAUDE.md note (or a nested CLAUDE.md inside that folder, loaded only when Claude works there) means it learns the layout once.',
+    evidence: ev,
+    make: hot && hot[1] >= 8 ? `${hot[0]}/CLAUDE.md` : 'A "Key files" section in CLAUDE.md',
+    prompt: `Read ${[hot && hot[1] >= 8 ? hot[0] + '/' : '', ...reread.map(([k]) => k)].filter(Boolean).join(', ')} and write a short ${hot && hot[1] >= 8 ? hot[0] + '/CLAUDE.md' : '"Key files" section in CLAUDE.md'}: what lives there, how it fits together, conventions, and gotchas. Max 25 lines.`,
+    score: 65,
+  }
+}
+
 const DETECTORS: Detector[] = [
   noClaudeMd, hookFromWords, formatAfterEdit, repeatedPrompt, claudeMdRules,
   designMd, research, gitFlow, corrections, mcp, allowlist, loops,
-  longSessions, noHelpers,
+  longSessions, noHelpers, ENV_GUARD, projectChecks, migrations, claudeMdStale,
+  testRunner, reviewer, hotAreas,
 ]
 
 export function analyze(
   turns: Turn[],
   setup: Setup,
-  extra: { sources: string[]; notes: string[] },
+  project: Project,
+  extra: { sources: string[]; notes: string[]; cwd?: string; thisProject?: number },
   now: number,
 ): Report {
   const prompts = turns.filter(t => t.role === 'user')
   const tools = turns.flatMap(t => t.tools.map(x => ({ ...x, session: t.session })))
   const sessions = new Set(turns.map(t => t.session)).size
-  const ctx: Ctx = { turns, prompts, tools, setup, sessions }
-  const suggestions = DETECTORS.flatMap(d => {
+  const ctx: Ctx = { turns, prompts, tools, setup, project, cwd: extra.cwd ?? '', sessions }
+  let suggestions = DETECTORS.flatMap(d => {
     const s = d(ctx)
     return s ? [s] : []
-  }).sort((a, b) => b.score - a.score)
+  })
+  // An evidence-based hook beats the generic one.
+  if (suggestions.some(s => s.id === 'hook-post-edit'))
+    suggestions = suggestions.filter(s => s.id !== 'hook-project-checks')
+  suggestions.sort((a, b) => b.score - a.score)
+
+  const stats: string[] = []
+  if (tools.length > 0) {
+    stats.push(
+      `${tools.length} tool calls — ` +
+        top(count(tools, t => t.name), 4).map(([k, v]) => `${k} ${v}`).join(', '),
+    )
+    const cmds = top(count(tools.filter(t => t.name === 'Bash'), t => commandKey(t.input.command)), 4)
+    if (cmds.length) stats.push('Most-run commands — ' + cmds.map(([k, v]) => `${k} ${v}×`).join(', '))
+  }
   return {
     generatedAt: now,
     sessions,
+    thisProject: extra.thisProject ?? 0,
     prompts: prompts.length,
+    project: project.summary,
+    stats,
     sources: extra.sources,
     notes: extra.notes,
     suggestions,

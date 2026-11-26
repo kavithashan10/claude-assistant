@@ -12,7 +12,10 @@ export type Suggestion = {
 export type Report = {
   generatedAt: number
   sessions: number
+  thisProject: number
   prompts: number
+  project: string
+  stats: string[]
   sources: string[]
   notes: string[]
   suggestions: Suggestion[]

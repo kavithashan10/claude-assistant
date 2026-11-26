@@ -20,6 +20,13 @@ patterns:
 | commit/push/PR over and over | a **/ship command** |
 | talk of GitHub, Figma, Slack… | an **MCP server** |
 
+It also learns **your project**: stack (Next.js, Python, Rust…), package manager,
+the real `test` / `lint` / `format` scripts, `.env` files, database migrations,
+monorepo layout, and whether your `CLAUDE.md` mentions how to test. Sessions are
+read **in full** (this project's newest 40, plus a few from other projects for your
+habits), so suggestions use your actual commands, folders and files, e.g. "auto-run
+`pnpm run lint` after edits", "block `.env` access", "give `src/cart/` its own CLAUDE.md".
+
 Each suggestion shows the evidence from your sessions, what to create, and a
 ready-to-send prompt. Press **Put in my prompt** (or **Copy**), review it, hit
 Enter, and Claude builds it with you. The **Learn** tab is a short tour of every
